@@ -7,7 +7,7 @@ parser.add_argument('modality', type=str, nargs='+', choices=['RGB', 'Flow', 'RG
 parser.add_argument('--train_list', type=str)
 parser.add_argument('--val_list', type=str)
 parser.add_argument('--visual_path', type=str, default="")
-parser.add_argument('--audio_path', type=str, default="")
+parser.add_argument('--audio_path', type=str, default=None)
 
 # ========================= Model Configs ==========================
 parser.add_argument('--arch', type=str, default="resnet101")
@@ -63,6 +63,7 @@ parser.add_argument('-e', '--evaluate', dest='evaluate', action='store_true',
 parser.add_argument('--snapshot_pref', type=str, default="")
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
+# nargs='+' all command-line args present are gathered into a list
 parser.add_argument('--gpus', nargs='+', type=int, default=None)
 parser.add_argument('--flow_prefix', default="", type=str)
 parser.add_argument('--experiment_suffix', default="", type=str)
