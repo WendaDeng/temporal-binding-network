@@ -1,3 +1,4 @@
+import logging
 import os
 import time
 import shutil
@@ -33,10 +34,12 @@ experiment_name = '_'.join((args.dataset, args.arch,
 experiment_dir = os.path.join(experiment_name, datetime.now().strftime('%b%d_%H-%M-%S'))
 log_dir = os.path.join('runs', experiment_dir)
 summaryWriter = SummaryWriter(logdir=log_dir)
+logging.basicConfig(filename=os.path.join(log_dir, 'log.txt'), level=logging.INFO)
 
 def main():
     global args, best_prec1, train_list, experiment_dir, best_loss
     args = parser.parse_args()
+    logging.info('Command line arguments:' + str(args))
 
     if args.dataset == 'ucf101':
         num_class = 101
@@ -55,9 +58,13 @@ def main():
 
     model = TBN(num_class, args.num_segments, args.modality,
                 base_model=args.arch,
-                consensus_type=args.consensus_type,
+                consensus_type=args.consensus_type, # default 'avg'
                 dropout=args.dropout,
-                midfusion=args.midfusion)
+                midfusion=args.midfusion)   # default 'concat'
+    print("Printing net...")
+    print(model)
+    logging.info("Network architecture:")
+    logging.info(model)
 
     crop_size = model.crop_size
     scale_size = model.scale_size
@@ -71,20 +78,26 @@ def main():
     if args.resume:
         if os.path.isfile(args.resume):
             print(("=> loading checkpoint {}".format(args.resume)))
+            logging.info(("=> loading checkpoint {}".format(args.resume)))
             checkpoint = torch.load(args.resume)
             args.start_epoch = checkpoint['epoch']
             best_prec1 = checkpoint['best_prec1']
             state_dict_new = OrderedDict()
             for k, v in checkpoint['state_dict'].items():
+                # str.split(sep, maxsplit) maxsplit: at most maxsplit splits are done
                 state_dict_new[k.split('.', 1)[1]] = v
+            # Copies parameters and buffers from state_dict_new into this module and its descendants.
             model.load_state_dict(state_dict_new)
             print(("=> loaded checkpoint '{}' (epoch {})"
+                  .format(args.evaluate, checkpoint['epoch'])))
+            logging.info(("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.evaluate, checkpoint['epoch'])))
         else:
             print(("=> no checkpoint found at '{}'".format(args.resume)))
     elif args.pretrained:
         if os.path.isfile(args.pretrained):
             print(("=> loading pretrained TBN model from {}".format(args.pretrained)))
+            logging.info(("=> loading pretrained TBN model from {}".format(args.pretrained)))
             checkpoint = torch.load(args.pretrained)
             state_dict_new = OrderedDict()
             for k, v in checkpoint['state_dict'].items():
@@ -96,9 +109,13 @@ def main():
     elif args.pretrained_flow:
         if os.path.isfile(args.pretrained_flow):
             print(("=> loading pretrained TSN Flow stream on Kinetics from {}".format(args.pretrained_flow)))
+            logging.info(("=> loading pretrained TSN Flow stream on Kinetics from {}".format(args.pretrained_flow)))
             state_dict = torch.load(args.pretrained_flow)
             for k, v in state_dict.items():
+                # torch.squeeze(input, dim) Returns a tensor with all the dims of input of size 1 removed.
+                # if dim is given, only squeeze in this dimension
                 state_dict[k] = torch.squeeze(v, dim=0)
+            # getattr(object, name[, default]) Return the value of named attr of object, same as model.flow
             base_model = getattr(model, 'flow')
             base_model.load_state_dict(state_dict, strict=False)
             print("Pretrained TSN Flow stream on Kinetics loaded")
@@ -423,6 +440,7 @@ def train(train_loader, model, criterion, optimizer, epoch, device):
                     noun_top1=noun_top1, noun_top5=noun_top5, lr=optimizer.param_groups[-1]['lr'])
 
             print(message)
+            logging.info(message)
     if 'epic' not in args.dataset:
         training_metrics = {'train_loss': losses.avg, 'train_acc': top1.avg}
     else:
@@ -496,32 +514,23 @@ def validate(val_loader, model, criterion, device):
             batch_time.update(time.time() - end)
             end = time.time()
 
-        if 'epic' not in args.dataset:
-            summaryWriter.add_scalars('data/loss', {
-                'validation': losses.avg,
-            }, training_iterations)
-            summaryWriter.add_scalars('data/precision/top1', {
-                'validation': top1.avg,
-            }, training_iterations)
-            summaryWriter.add_scalars('data/precision/top5', {
-                'validation': top5.avg
-            }, training_iterations)
+        summaryWriter.add_scalars('data/loss', {
+            'validation': losses.avg,
+        }, training_iterations)
+        summaryWriter.add_scalars('data/precision/top1', {
+            'validation': top1.avg,
+        }, training_iterations)
+        summaryWriter.add_scalars('data/precision/top5', {
+            'validation': top5.avg
+        }, training_iterations)
 
+        if 'epic' not in args.dataset:
             message = ('Testing Results: '
                        'Prec@1 {top1.avg:.3f} Prec@5 {top5.avg:.3f} '
                        'Loss {loss.avg:.5f}').format(top1=top1,
                                                      top5=top5,
                                                      loss=losses)
         else:
-            summaryWriter.add_scalars('data/loss', {
-                'validation': losses.avg,
-            }, training_iterations)
-            summaryWriter.add_scalars('data/precision/top1', {
-                'validation': top1.avg,
-            }, training_iterations)
-            summaryWriter.add_scalars('data/precision/top5', {
-                'validation': top5.avg
-            }, training_iterations)
             summaryWriter.add_scalars('data/verb/loss', {
                 'validation': verb_losses.avg,
             }, training_iterations)
@@ -555,6 +564,7 @@ def validate(val_loader, model, criterion, device):
                                                      loss=losses)
 
         print(message)
+        logging.info(message)
         if 'epic' not in args.dataset:
             test_metrics = {'val_loss': losses.avg, 'val_acc': top1.avg}
         else:
