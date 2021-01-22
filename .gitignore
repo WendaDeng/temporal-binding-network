@@ -3,6 +3,7 @@ submit_jobs_fuse_*.py
 test_fusion.py
 sftp-config*.json
 *.py[cod]
+/data/*
 /scores/*
 /jobs/*
 /evaluation/*

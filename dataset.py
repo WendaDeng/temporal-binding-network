@@ -112,6 +112,8 @@ class TBNDataSet(data.Dataset):
         """
         average_duration = (record.num_frames[modality] - self.new_length[modality] + 1) // self.num_segments
         if average_duration > 0:
+            # np.multiply(x1, x2) Multiply arguments element-wise
+            # randint(low) Return random integers between [0, low)
             offsets = np.multiply(list(range(self.num_segments)), average_duration) + randint(average_duration, size=self.num_segments)
         # elif record.num_frames[modality] > self.num_segments:
         #     offsets = np.sort(randint(record.num_frames[modality] - self.new_length[modality] + 1, size=self.num_segments))
@@ -164,10 +166,10 @@ class TBNDataSet(data.Dataset):
             if m != 'RGB' and self.mode == 'train':
                 np.random.shuffle(segment_indices)
 
-            img, label = self.get(m, record, segment_indices)
+            img, label, _ = self.get(m, record, segment_indices)
             input[m] = img
 
-        return input, label
+        return input, label, _
 
     def get(self, modality, record, indices):
 
