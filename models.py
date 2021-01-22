@@ -104,6 +104,27 @@ TSN Configurations:
                 elif m == 'RGB':
                     self.input_mean[m] = [104, 117, 128]
             self.feature_dim = 1024
+        elif 'resnet' in base_model or 'vgg' in base_model:
+            self.base_model = OrderedDict()
+            self.input_size = OrderedDict()
+            self.input_mean = OrderedDict()
+            self.input_std = OrderedDict()
+
+            for m in self.modality:
+                self.base_model[m] = getattr(torchvision.models, base_model)(True)
+                self.base_model.last_layer_name = 'fc'
+                self.input_size[m] = 224
+                if m != 'Spec':
+                    self.input_mean[m] = [0.485, 0.456, 0.406]
+                    self.input_std[m] = [0.229, 0.224, 0.225]
+
+                if m == 'Flow':
+                    self.input_mean[m] = [0.5]
+                    self.input_std[m] = [np.mean(self.input_std[m])]
+                elif m == 'RGBDiff':
+                    self.input_mean[m] = [0.485, 0.456, 0.406] + [0] * 3 * self.new_length[m]
+                    self.input_std[m] = self.input_std[m] + [np.mean(self.input_std[m]) * 2] * 3 * self.new_length[m]
+            self.feature_dim = 1024
         else:
             raise ValueError('Unknown base model: {}'.format(base_model))
 
@@ -112,6 +133,7 @@ TSN Configurations:
         if freeze_mode == 'modalities':
             for m in self.modality:
                 print('Freezing ' + m + ' stream\'s parameters')
+                # Return the value of the named attribute of object. same as self.m.lower()
                 base_model = getattr(self, m.lower())
                 for param in base_model.parameters():
                     param.requires_grad_(False)
@@ -121,6 +143,7 @@ TSN Configurations:
                 count = 0
                 print("Freezing BatchNorm2D parameters except the first one.")
                 base_model = getattr(self, mod.lower())
+                # nn.Module.modules() Returns an iterator over all modules in the network.
                 for m in base_model.modules():
                     if isinstance(m, nn.BatchNorm2d):
                         count += 1
@@ -139,6 +162,7 @@ TSN Configurations:
                         count += 1
                         if count >= 2:
                             # shutdown running statistics update in frozen mode
+                            # Returns an iterator over module parameters. same as m.train(False)
                             m.eval()
         elif freeze_mode == 'bn_statistics':
             for mod in self.modality:
@@ -199,6 +223,8 @@ TSN Configurations:
         # Torch models are usually defined in a hierarchical way.
         # nn.modules.children() return all sub modules in a DFS manner
         modules = list(self.base_model['Flow'].modules())
+        # filter(func, iterable) Construct an iterator from those items of
+        # iterable for which function returns true.
         first_conv_idx = list(filter(lambda x: isinstance(modules[x], nn.Conv2d), list(range(len(modules)))))[0]
         conv_layer = modules[first_conv_idx]
         container = modules[first_conv_idx - 1]
