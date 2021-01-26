@@ -1,5 +1,7 @@
+import torch.nn.functional as F
 from torch import nn
 from fusion_classification_network import Fusion_Classification_Network
+from temporal_fusion import TemporalFusion
 from transforms import *
 from collections import OrderedDict
 
@@ -74,10 +76,20 @@ TSN Configurations:
                 if tup[0] == self.base_model[m].last_layer_name:
                     self.base_model[m]._op_list.remove(tup)
 
+    def _remove_global_pool_layer(self):
+        # This works only with BNInception.
+        for m in self.modality:
+            delattr(self.base_model[m], 'global_pool')
+            for tup in self.base_model[m]._op_list:
+                if tup[0] == 'global_pool':
+                    self.base_model[m]._op_list.remove(tup)
+
     def _prepare_tbn(self):
 
         self._remove_last_layer()
+        self._remove_global_pool_layer()
 
+        self.temporal_fusion_net = TemporalFusion(self.feature_dim)
         self.fusion_classification_net = Fusion_Classification_Network(
             self.feature_dim, self.modality, self.midfusion, self.num_class,
             self.consensus_type, self.before_softmax, self.dropout, self.num_segments)
@@ -192,6 +204,8 @@ TSN Configurations:
                 input[m] = self._get_diff(input[m])
             base_model = getattr(self, m.lower())
             base_out = base_model(input[m].view((-1, sample_len) + input[m].size()[-2:]))
+            base_out = self.temporal_fusion_net(base_out)
+            base_out = F.avg_pool2d(base_out, kernel_size=7, stride=1, padding=0)
 
             base_out = base_out.view(base_out.size(0), -1)
             concatenated.append(base_out)
