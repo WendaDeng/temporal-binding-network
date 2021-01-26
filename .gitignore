@@ -9,6 +9,7 @@ sftp-config*.json
 /evaluation/*
 /stats/*
 /models/*
+/runs/*
 /.idea/*
 *.o*
 *.err*
